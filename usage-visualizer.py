@@ -3,7 +3,7 @@ import datetime
 
 csvfile = open('/home/janezpavel/Moje/razvidi/usage_times.csv', 'r')
 
-if os.stat('/home/janezpavel/Moje/razvidi/usage_times.csv').st_size == 0:
+if os.stat('filepath').st_size == 0:
     print("Error - CSV file is empty!")
     exit()
 
