@@ -4,36 +4,17 @@ import datetime
 csvfile = open('/filepath', 'r')
 
 if os.stat('filepath').st_size == 0:
-    print("Error - CSV file is empty!")
-    exit()
+    sys.exit("Error - CSV file is empty!")
 
 columns = os.get_terminal_size().columns #get width of terminal
 
 columnsG = columns - 17 #17 character beside graph (date, total time in day)
-if columnsG < 16:
-    unit = 120
-elif columnsG < 24:
-    unit = 90
-elif columnsG < 32:
-    unit = 60
-elif columnsG < 36:
-    unit = 45
-elif columnsG < 48:
-    unit = 40
-elif columnsG < 72:
-    unit= 30
-elif columnsG < 96:
-    unit = 20
-elif columnsG < 144:
-    unit = 15
-elif columnsG < 288:
-    unit = 10
-elif columnsG < 720:
-    unit = 5
-elif columnsG < 1440:
-    unit = 2
-elif columnsG >= 1440:
-    unit = 1
+units = [1, 2, 5, 10, 15, 20, 30, 40, 45, 60, 90, 120]
+for u in units:
+    n_required = 1440 / u
+    if n_required <= columnsG:
+        unit = u
+        break
 
 print("1 unit =", unit, "min")
 
