@@ -1,21 +1,67 @@
+# usage_logger.py
+# Author: Janez Pavel Žebovec
+# Date: 2025-03-29
+# Description: Program for visualization of computer usage on base of CSV loggins.
+
 import os
 import datetime
 
-csvfile = open('/filepath', 'r')
+# Dictionaries ===========================================================================================================================
 
-if os.stat('filepath').st_size == 0:
+actions = {
+    "startup" : {"implied_state": "notusing", "sus_previous_state": ["startup","resume", "suspend", "lock", "unlock", None],},
+    "shutdown" : {"implied_state": "using", "sus_previous_state": ["shutdown", None],},
+    "resume" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "resume", None],},
+    "suspend" : {"implied_state": "using", "sus_previous_state": ["shutdown", "suspend", "lock", None],},
+    "unlock" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "unlock", None],},
+    "lock" : {"implied_state": "using", "sus_previous_state": ["shutdown", "suspend", "lock", None],},
+    }
+
+states = {
+    "using" : "|",
+    "notusing" : ".",
+    "sus_using" : "'",
+    "sus_notusing": ",",
+    "both": ":"
+    }
+
+units = [1, 2, 5, 10, 15, 20, 30, 40, 45, 60, 90, 120] #available sizes of units
+
+# Functions ====================================================================================================================================================
+
+def writePeriod(graph, chars, pTMin, tMin, pAction, action, totDayTime, totTime, unit):
+
+    perFullUnits = max(0, tMin // unit - chars) #number of full units for period before current action - 0/negative is in case the time difference between times is too small for unit
+    chars += perFullUnits
+
+    if pAction in actions[action]["sus_previous_state"]: #if previous action is on list of suspicious previous action of current action
+        state = "sus_" + actions[action]["implied_state"] #it's suspicious - there was probably some crashing in that period
+    else:
+        state = actions[action]["implied_state"]
+
+    graph += states[state] * perFullUnits
+    
+    if state == "using":
+        duration = tMin - pTMin
+        totDayTime += duration
+        totTime += duration
+
+    if tMin % unit: #time over full unit - time less than one unit
+        chars += 1
+        graph += states["both"]
+
+    pTMin = tMin
+    return graph, chars, pTMin, pAction, totDayTime, totTime
+
+#====================================================================================================================================================
+
+file_path = 'filepath.csv'
+
+if os.stat(file_path).st_size == 0: #check if CSV file is empty
     sys.exit("Error - CSV file is empty!")
 
-columns = os.get_terminal_size().columns #get width of terminal
-
-columnsG = columns - 17 #17 character beside graph (date, total time in day)
-units = [1, 2, 5, 10, 15, 20, 30, 40, 45, 60, 90, 120]
-for u in units:
-    n_required = 1440 / u
-    if n_required <= columnsG:
-        unit = u
-        break
-
+columnsG = os.get_terminal_size().columns - 17 #get width of terminal minus 17 character beside graph (for date nad total day usage)
+unit = next((u for u in units if 1440 / u <= columnsG), max(units)) #number of units per day must be equal or smaller than width of terminal (minus 17), to fit in; if none is big enough, use biggest unit
 print("1 unit =", unit, "min")
 
 graph = ""
@@ -31,107 +77,39 @@ pAction = None #previous action
 pDate = None #previous date
 pTMin = 0 #time of previous action in minutes
 
-for line in csvfile:
-    timestamp, action = line.split(",")
-    action = action.strip()
-    date, time = timestamp.split(" ")
-    hh, mm, ss = list(map(int, time.split(":")))
+with open(file_path, 'r') as csvfile: #open CSV file with logged times and actions
+    for line in csvfile:
+        timestamp, action = map(str.strip, line.split(","))
+        date, time = timestamp.split()
+        hh, mm, ss = map(int, time.split(":"))
 
-    if date != pDate and pDate is not None: #if we get to new date, before starting new day, we must finish previous one:
+        if date != pDate and pDate is not None: #if we get to new date, before starting new day, we must finish previous one:
 
-        tFullUnits = 1440 // unit #time of end of day in full units
+            graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
 
-        perFullUnits = tFullUnits - chars #number of full units for period before current action minus number of characters already written in graph
-        chars += perFullUnits
+            print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") #print line for previous day
+            chars = 0
+            totDayTime = 0
+            days += 1
+            graph = ""
 
-        if action in ["startup", "resume", "unlock"]: #if current action (first action of day after closing one)
-            if pAction in ["shutdown", "suspend", "lock"]: #it's expected to be so
-                graph += "." * perFullUnits 
-            else: #it's suspicious - there was probably some crashing in that period, so that computer wasn't shutdown in right way
-                graph += "," * perFullUnits
+        tMin = int(hh * 60 + mm) #time of current action in minutes
+        tFullUnits = tMin // unit #time in number of full units
+        tLess = tMin % unit #time over full unit - time less than one unit
 
-        elif action in ["shutdown", "suspend", "lock"]: #if current action (first action of day after closing one)
-            if pAction in ["startup", "resume", "unlock"]: #it's expected to be so
-                duration = 1440 - pTMin #duration of period since previous (last action in closing day) to end of day in minutes
-                totDayTime += duration
-                totTime += duration
-                graph += "|" * perFullUnits
-            else: #it's suspicious - computer was shutdown/suspended/locked without being started/resumed/unlocked before that
-                graph += "'" * perFullUnits
+        graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, tMin, pAction, action, totDayTime, totTime, unit)
 
-        print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") #print line for previous day
-        chars = 0
-        totDayTime = 0
-        days += 1
-        graph = ""
+        ## Preparation for next line of CSV
+        pDate = date
+        pAction = action
 
-    tMin = int(hh * 60 + mm) #time of current action in minutes
-    tFullUnits = tMin // unit #time in number of full units
-    tLess = tMin % unit #time over full unit - time less than one unit
-
-    if chars >= tFullUnits:
-        perFullUnits = 0
-    else:
-        perFullUnits = tFullUnits - chars #number of full units for period before current action
-    chars += perFullUnits
-
-    if tLess != 0:
-        chars += 1
-
-    if action in ["startup", "resume", "unlock"]:
-        if pAction in ["shutdown", "suspend", "lock"]:
-            graph += "." * perFullUnits
-            if tLess != 0:
-                graph += ":"
-        else:
-            graph += "," * perFullUnits
-            if tLess != 0:
-                graph += ";"
-
-    elif action in ["shutdown", "suspend", "lock"]:
-        if pAction in ["startup", "resume", "unlock"]:
-            duration = tMin - pTMin
-            totDayTime += duration
-            totTime += duration
-            graph += "|" * perFullUnits
-            if tLess != 0:
-                graph += ":"
-        else:
-            graph += "'" * perFullUnits
-            if tLess != 0:
-                graph += ":"
-
-    ## Preparation for next line of CSV
-    pDate = date
-    pTMin = tMin
-    pAction = action
-
-csvfile.close()
-
+#Remove this section, if you don't want only visualize logged usage (without current) - you would maybe just want to close last logged day with that section-------------
 ## We went through all lines of CSV - finishing line of current day
 if date is not None:
     date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    if date != pDate: #we need to finish previous day first
-        tFullUnits = 1440 // unit #time of end of day in full units
-
-        perFullUnits = tFullUnits - chars #number of full units for period before current action minus number of characters already written in graph
-        chars += perFullUnits
-
-        if action in ["startup", "resume", "unlock"]: #if current action (first action of day after closing one)
-            if pAction in ["shutdown", "suspend", "lock"]: #it's expected to be so
-                graph += "." * perFullUnits 
-            else: #it's suspicious - there was probably some crashing in that period, so that computer wasn't shutdown in right way
-                graph += "," * perFullUnits
-
-        elif action in ["shutdown", "suspend", "lock"]: #if current action (first action of day after closing one)
-            if pAction in ["startup", "resume", "unlock"]: #it's expected to be so
-                duration = 1440 - pTMin #duration of period since previous (last action in closing day) to end of day in minutes
-                totDayTime += duration
-                totTime += duration
-                graph += "|" * perFullUnits
-            else: #it's suspicious - computer was shutdown/suspended/locked without being started/resumed/unlocked before that
-                graph += "'" * perFullUnits
+    if date != pDate: #if we are of not-yet-logged date, we need to finish previous day first (it's possible only if you stay on computer too late in night)
+        graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
 
         print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") #print line for previous day
         chars = 0
@@ -139,25 +117,18 @@ if date is not None:
         days += 1
         graph = ""
 
-    now = datetime.datetime.now()
-    nowTMin = now.hour * 60 + now.minute
-    
-    tFullUnits = nowTMin //unit
+    now = datetime.datetime.now() #get current time
+    nowTMin = now.hour * 60 + now.minute #current time in minutes
 
-    perFullUnits = tFullUnits - chars
-    
-    if pAction in ["shutdown", "suspend", "lock"]:
-        graph += "." * perFullUnits
+    graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, nowTMin, pAction, "shutdown", totDayTime, totTime, unit)
 
-    elif pAction in ["startup", "resume", "unlock"]:
+    print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") # Print day to noW
+
+    if date != pDate:
         duration = nowTMin - pTMin
-        totDayTime += duration
-        totTime += duration
-        graph += "|" * perFullUnits
-
-    print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") # Print day to now
+        totTime -= duration #to use only closed days for calculating average usage per day
+#------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 aveTime = totTime / days
 print(f"Average usage: {int(aveTime // 60):02d}:{int(aveTime % 60):02d} per day")
-print(f"Total loged time: {int(totTime // 60):02d}:{int(totTime % 60):02d} in {days} days")
-
+print(f"Total loged time: {int((totTime) // 60):02d}:{int(totTime % 60):02d} in {days} days")
