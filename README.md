@@ -1,6 +1,15 @@
 # Python visualizer of computer usage
 
 ## Input
+
+**You have to replace "filepath.csv" with your real file path to CSV file.**
+
+Example of edited file path:
+
+```py
+file_path = '/home/janezpavel/logs/usage_times.csv'
+```
+
 This script recieves input of CSV file with lines for each actions in form like `YYY-MM-DD HH:MM:SS, action`.
 
 Example of input:
@@ -12,14 +21,6 @@ Example of input:
 2025-03-22 16:42:30, suspend
 2025-03-22 16:42:30, resume
 2025-03-22 16:42:30, shutdown
-```
-
-**You have to replace "filepath.csv" with your real file path to CSV file.**
-
-Example of edited file path:
-
-```py
-file_path = '/home/janezpavel/logs/usage_times.csv'
 ```
 
 ## Output
