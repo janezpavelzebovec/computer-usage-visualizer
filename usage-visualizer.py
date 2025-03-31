@@ -79,7 +79,7 @@ pTMin = 0 #time of previous action in minutes
 
 with open(file_path, 'r') as csvfile: #open CSV file with logged times and actions
     for line in csvfile:
-        timestamp, action = map(str.strip, line.split(","))
+        timestamp, action = map(str.strip, line.split(",")[:2])
         date, time = timestamp.split()
         hh, mm, ss = map(int, time.split(":"))
 
