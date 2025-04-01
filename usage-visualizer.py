@@ -92,6 +92,7 @@ with open(file_path, 'r') as csvfile: #open CSV file with logged times and actio
             totDayTime = 0
             days += 1
             graph = ""
+            pTMin = 0
 
         tMin = int(hh * 60 + mm) #time of current action in minutes
         tFullUnits = tMin // unit #time in number of full units
