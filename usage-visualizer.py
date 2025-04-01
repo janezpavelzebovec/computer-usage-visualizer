@@ -131,5 +131,5 @@ if date is not None:
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 aveTime = totTime / days
-print(f"Average usage: {int(aveTime // 60):02d}:{int(aveTime % 60):02d} per day")
-print(f"Total loged time: {int((totTime) // 60):02d}:{int(totTime % 60):02d} in {days} days")
+print(f"Average usage: {int(aveTime // 60)} hours and {int(aveTime % 60)} minutes per day")
+print(f"Total loged time: {int((totTime) // 60)} hours and {int(totTime % 60)} minutes in {days} days")
