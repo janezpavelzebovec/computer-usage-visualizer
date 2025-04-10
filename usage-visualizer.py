@@ -133,3 +133,5 @@ if date is not None:
 aveTime = totTime / days
 print(f"Average usage: {int(aveTime // 60)} h, {int(aveTime % 60)} min per day")
 print(f"Total loged time: {int((totTime) // 60)} h, {int(totTime % 60)} min in {days} days")
+
+input()
