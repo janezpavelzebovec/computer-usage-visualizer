@@ -1,6 +1,8 @@
-# usage_logger.py
+#!/usr/bin/python3
+
+# usage_visualizer.py
 # Author: Janez Pavel Žebovec
-# Date: 2025-03-29
+# Date: 2025-06-28
 # Description: Program for visualization of computer usage on base of CSV loggins.
 
 import os
@@ -9,12 +11,14 @@ import datetime
 # Dictionaries ===========================================================================================================================
 
 actions = {
-    "startup" : {"implied_state": "notusing", "sus_previous_state": ["startup","resume", "suspend", "lock", "unlock", None],},
+    "startup" : {"implied_state": "notusing", "sus_previous_state": ["startup","resume", "suspend", "lock", "unlock", "innouseMan", "inuseMan", None],},
     "shutdown" : {"implied_state": "using", "sus_previous_state": ["shutdown", None],},
-    "resume" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "resume", None],},
     "suspend" : {"implied_state": "using", "sus_previous_state": ["shutdown", "suspend", "lock", None],},
-    "unlock" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "unlock", None],},
+    "resume" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "resume", "innouseMan", "inuseMan", None],},
     "lock" : {"implied_state": "using", "sus_previous_state": ["shutdown", "suspend", "lock", None],},
+    "unlock" : {"implied_state": "notusing", "sus_previous_state": ["shutdown", "unlock", "innouseMan", "inuseMan", None],},
+    "innouseMan" : {"implied_state": "using", "sus_previous_state": ["shutdown", "suspend", "lock", None],}, # for manually added time of starting not using computer while still unlocked
+    "inuseMan" : {"implied_state": "notusing", "sus_previous_state": ["startup","resume", "suspend", "lock", "unlock", "shutdown", "unlock", None],}, # pair of "innouseMan"
     }
 
 states = {
@@ -25,7 +29,7 @@ states = {
     "both": ":"
     }
 
-units = [1, 2, 5, 10, 15, 20, 30, 40, 45, 60, 90, 120] #available sizes of units
+units = [1, 2, 5, 10, 15, 20, 30, 40, 45, 60, 90, 120] #available sizes of units in minutes
 
 # Functions ====================================================================================================================================================
 
@@ -51,11 +55,11 @@ def writePeriod(graph, chars, pTMin, tMin, pAction, action, totDayTime, totTime,
         graph += states["both"]
 
     pTMin = tMin
-    return graph, chars, pTMin, pAction, totDayTime, totTime
+    return graph, chars, pTMin, pAction, totDayTime, totTime, state
 
 #====================================================================================================================================================
 
-file_path = 'filepath.csv'
+file_path = '/home/janezpavel/Moje/razvidi/usage_times.csv'
 
 if os.stat(file_path).st_size == 0: #check if CSV file is empty
     sys.exit("Error - CSV file is empty!")
@@ -83,9 +87,22 @@ with open(file_path, 'r') as csvfile: #open CSV file with logged times and actio
         date, time = timestamp.split()
         hh, mm, ss = map(int, time.split(":"))
 
+
+        # Check missing days in CSV file because of whole-day notuse
+        if pDate is not None:
+            current_date = datetime.date.fromisoformat(date)
+            prev_date = datetime.date.fromisoformat(pDate)
+            delta_days = (current_date - prev_date).days
+            if delta_days > 1:
+                for i in range(1, delta_days):
+                    missing_date = prev_date + datetime.timedelta(days=i)
+                    empty_graph = states["notusing"] * (1440 // unit)
+                    print(missing_date.strftime("%Y-%m-%d"), empty_graph, "00:00")
+                    days += 1
+
         if date != pDate and pDate is not None: #if we get to new date, before starting new day, we must finish previous one:
 
-            graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
+            graph, chars, pTMin, pAction, totDayTime, totTime, state = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
 
             print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") #print line for previous day
             chars = 0
@@ -98,7 +115,7 @@ with open(file_path, 'r') as csvfile: #open CSV file with logged times and actio
         tFullUnits = tMin // unit #time in number of full units
         tLess = tMin % unit #time over full unit - time less than one unit
 
-        graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, tMin, pAction, action, totDayTime, totTime, unit)
+        graph, chars, pTMin, pAction, totDayTime, totTime, state = writePeriod(graph, chars, pTMin, tMin, pAction, action, totDayTime, totTime, unit)
 
         ## Preparation for next line of CSV
         pDate = date
@@ -110,7 +127,7 @@ if date is not None:
     date = datetime.datetime.now().strftime("%Y-%m-%d")
 
     if date != pDate: #if we are of not-yet-logged date, we need to finish previous day first (it's possible only if you stay on computer too late in night)
-        graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
+        graph, chars, pTMin, pAction, totDayTime, totTime, state = writePeriod(graph, chars, pTMin, 1440, pAction, action, totDayTime, totTime, unit)
 
         print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") #print line for previous day
         chars = 0
@@ -121,7 +138,7 @@ if date is not None:
     now = datetime.datetime.now() #get current time
     nowTMin = now.hour * 60 + now.minute #current time in minutes
 
-    graph, chars, pTMin, pAction, totDayTime, totTime = writePeriod(graph, chars, pTMin, nowTMin, pAction, "shutdown", totDayTime, totTime, unit)
+    graph, chars, pTMin, pAction, totDayTime, totTime, state = writePeriod(graph, chars, pTMin, nowTMin, pAction, "shutdown", totDayTime, totTime, unit)
 
     print(pDate, graph, f"{int(totDayTime // 60):02d}:{int(totDayTime % 60):02d}") # Print day to noW
 
